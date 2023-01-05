@@ -1,0 +1,205 @@
+#!/bin/bash
+
+if [[ -z "${CONFIG_DEBUG}" ]]; then
+  DEBUG="false"
+else
+  DEBUG="${CONFIG_DEBUG}"
+fi
+
+if [[ -z "${CONFIG_LDAP_HOST}" ]]; then
+  echo 'Variable CONFIG_LDAP_HOST does not exist'
+  exit 1
+else
+  LDAP_HOST="${CONFIG_LDAP_HOST}"
+fi
+
+if [[ -z "${CONFIG_LDAP_SERVICE_ACCOUNT_USERNAME}" ]]; then
+  echo 'Variable CONFIG_LDAP_SERVICE_ACCOUNT_USERNAME does not exist'
+  exit 1
+else
+  LDAP_SERVICE_ACCOUNT_USERNAME="${CONFIG_LDAP_SERVICE_ACCOUNT_USERNAME}"
+fi
+
+if [[ -z "${CONFIG_LDAP_SERVICE_ACCOUNT_PASSWORD}" ]]; then
+  echo 'Variable CONFIG_LDAP_SERVICE_ACCOUNT_PASSWORD does not exist'
+  exit 1
+else
+  LDAP_SERVICE_ACCOUNT_PASSWORD="${CONFIG_LDAP_SERVICE_ACCOUNT_PASSWORD}"
+fi
+
+if [[ -z "${CONFIG_LDAP_SEARCH_DN}" ]]; then
+  echo 'Variable CONFIG_LDAP_SEARCH_DN does not exist'
+  exit 1
+else
+  LDAP_SEARCH_DN="${CONFIG_LDAP_SEARCH_DN}"
+fi
+
+if [[ -z "${CONFIG_LDAP_BIND_DN}" ]]; then
+  echo 'Variable CONFIG_LDAP_BIND_DN does not exist'
+  exit 1
+else
+  LDAP_BIND_DN="${CONFIG_LDAP_BIND_DN}"
+fi
+
+if [[ -z "${CONFIG_LDAP_SSL_VERIFY}" ]]; then
+  LDAP_SSL_VERIFY="true"
+else
+  LDAP_SSL_VERIFY="${CONFIG_LDAP_SSL_VERIFY}"
+fi
+
+if [[ -z "${CONFIG_LDAP_TRANSPORT}" ]]; then
+  LDAP_TRANSPORT="ldaps"
+  echo -n | openssl s_client -connect ${CONFIG_LDAP_HOST}:636 -showcerts | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' > /config/${CONFIG_LDAP_HOST}.chain.pem
+else
+  LDAP_TRANSPORT="${CONFIG_LDAP_TRANSPORT}"
+fi
+
+if [[ -z "${CONFIG_LDAP_AUTH_TYPE}" ]]; then
+  LDAP_AUTH_TYPE="plain"
+else
+  LDAP_AUTH_TYPE="${CONFIG_LDAP_TRANSPORT}"
+fi
+
+if [[ -z "${CONFIG_LDAP_PORT}" ]]; then
+  LDAP_PORT="636"
+else
+  LDAP_PORT="${CONFIG_LDAP_PORT}"
+fi
+
+if [[ ! -z "${CONFIG_LDAP_HOST_2}" ]]; then
+  LDAP_HOST_2="host_2=${CONFIG_LDAP_HOST_2}"
+fi
+
+if [[ ! -z "${CONFIG_LDAP_HOST_3}" ]]; then
+  LDAP_HOST_3="host_3=${CONFIG_LDAP_HOST_3}"
+fi
+
+if [[ ! -z "${CONFIG_LDAP_HOST_4}" ]]; then
+  LDAP_HOST_4="host_4=${CONFIG_LDAP_HOST_4}"
+fi
+
+if [[ ! -z "${CONFIG_LDAP_HOST_5}" ]]; then
+  LDAP_HOST_5="host_5=${CONFIG_LDAP_HOST_5}"
+fi
+
+if [[ -z "${DUO_IKEY}" ]]; then
+  echo 'Variable DUO_IKEY does not exist'
+  exit 1
+else
+  IKEY="${DUO_IKEY}"
+fi
+
+if [[ -z "${DUO_SKEY}" ]]; then
+  echo 'Variable DUO_SKEY does not exist'
+  exit 1
+else
+  SKEY="${DUO_SKEY}"
+fi
+
+if [[ -z "${DUO_API_HOST}" ]]; then
+  echo 'Variable DUO_API_HOST does not exist'
+  exit 1
+else
+  API_HOST="${DUO_API_HOST}"
+fi
+
+if [[ -z "${CONFIG_EXEMPT_PRIMARY_BIND}" ]]; then
+  EXEMPT_PRIMARY_BIND="false"
+else
+  EXEMPT_PRIMARY_BIND="${CONFIG_EXEMPT_PRIMARY_BIND}"
+fi
+
+if [[ ! -z "${CONFIG_EXEMPT_OU_1}" ]]; then
+  EXEMPT_OU_1="exempt_ou_1=${CONFIG_EXEMPT_OU_1}"
+fi
+
+if [[ ! -z "${CONFIG_EXEMPT_OU_2}" ]]; then
+  EXEMPT_OU_2="exempt_ou_2=${CONFIG_EXEMPT_OU_2}"
+fi
+
+if [[ ! -z "${CONFIG_EXEMPT_OU_3}" ]]; then
+  EXEMPT_OU_3="exempt_ou_3=${CONFIG_EXEMPT_OU_3}"
+fi
+
+if [[ ! -z "${CONFIG_EXEMPT_OU_4}" ]]; then
+  EXEMPT_OU_4="exempt_ou_4=${CONFIG_EXEMPT_OU_4}"
+fi
+
+if [[ -z "${CONFIG_ALLOW_UNLIMITED_BINDS}" ]]; then
+  ALLOW_UNLIMITED_BINDS="true"
+else
+  ALLOW_UNLIMITED_BINDS="${CONFIG_ALLOW_UNLIMITED_BINDS}"
+fi
+
+if [[ -z "${CONFIG_FAILMODE}" ]]; then
+  FAILMODE="safe"
+else
+  FAILMODE="${CONFIG_FAILMODE}"
+fi
+
+if [[ -z "${SSL_SELF_SIGN}" ]]; then
+  echo 'Using Self Sign Certificate'
+  #openssl req -newkey rsa:2048 -nodes -keyout ./ldap_server.key -x509 -days 3650 -out ./ldap_server.pem
+  echo 'Generating Self Sign Certificate'
+  openssl req -x509 -newkey rsa:4096 -nodes -out /config/ldap_server.pem -keyout /config/ldap_server.key -days 3650 -subj "/C=PR/O=Auth/OU=Duo/CN=duoauthproxy.local"
+  echo 'Validating Self Sign Certificate'
+  openssl x509 -text -noout -in /config/ldap_server.pem
+else
+  echo 'Using Custom LDAP SSL'
+  if [[ -f "/config/ldap_server.pem" && -f "/config/ldap_server.key" ]]; then
+    echo "Found SSL Files /config/ldap_server.pem and /config/ldap_server.key"
+    continue
+  else 
+    echo "Cannot find SSL Files /config/ldap_server.pem and /config/ldap_server.key"
+    exit 1
+  fi
+fi
+
+cat << EOF > /config/authproxy.cfg
+[main]
+debug=${DEBUG}
+
+[ad_client]
+host=${LDAP_HOST}
+service_account_username=${LDAP_SERVICE_ACCOUNT_USERNAME}
+service_account_password=${LDAP_SERVICE_ACCOUNT_PASSWORD}
+auth_type=${LDAP_AUTH_TYPE}
+search_dn=${LDAP_SEARCH_DN}
+bind_dn=${LDAP_BIND_DN}
+ssl_verify_hostname=${LDAP_SSL_VERIFY}
+transport=${LDAP_TRANSPORT}
+port=${LDAP_PORT}
+ssl_ca_certs_file=/config/${CONFIG_LDAP_HOST}.chain.pem
+
+${LDAP_HOST_2}
+${LDAP_HOST_3}
+${LDAP_HOST_4}
+${LDAP_HOST_5}
+
+[ldap_server_auto]
+ikey=${IKEY}
+skey=${SKEY}
+api_host=${API_HOST}
+port=1636
+exempt_primary_bind=${EXEMPT_PRIMARY_BIND}
+allow_unlimited_binds=${ALLOW_UNLIMITED_BINDS}
+failmode=${FAILMODE}
+ssl_cert_path=/config/ldap_server.pem
+ssl_key_path=/config/ldap_server.key
+${EXEMPT_OU_1}
+${EXEMPT_OU_2}
+${EXEMPT_OU_3}
+${EXEMPT_OU_4}
+EOF
+
+cd /opt/
+
+if [[ $1 == "duoproxy" ]]; then
+   /opt/duoauthproxy/bin/authproxy_connectivity_tool
+   config_check=$?
+   if [ $config_check -ne 0 ]; then
+      exit 1
+   fi
+   exec /opt/duoauthproxy/usr/local/bin/python3 /opt/duoauthproxy/usr/local/bin/twistd --pidfile=/opt/duoauthproxy/run/duoauthproxy.pid --python=/opt/duoauthproxy/bin/duoauthproxy.tap --uid=1001 --gid=1001 --nodaemon
+fi
+exec "$@"
